@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
+import { Leopard } from '@picovoice/leopard-node';
 
 (async () => {
 
@@ -14,105 +15,75 @@ import path from 'path';
 	const browser = await puppeteer.launch({
 		headless: false
 	});
+
+	const page = await browser.newPage();
+
+	await page.goto('https://www.google.com/recaptcha/api2/demo');
+
+	const recaptchaSelector = await page.waitForSelector('iframe[src*="api2/anchor"]');
+	const frame = await recaptchaSelector.contentFrame();
+	await frame.waitForSelector('#recaptcha-anchor');
+	const checkbox = await frame.$('#recaptcha-anchor');
 	
-	// const page = await browser.newPage();
-
-	// await page.goto('https://www.google.com/recaptcha/api2/demo');
-
-	// const recaptchaSelector = await page.waitForSelector('iframe[src*="api2/anchor"]');
-	// const frame = await recaptchaSelector.contentFrame();
-	// await frame.waitForSelector('#recaptcha-anchor');
-	// const checkbox = await frame.$('#recaptcha-anchor');
+	console.log("[+] Clicking reCAPTCHA Checkbox");
 	
-	// console.log("[+] Clicking reCAPTCHA Checkbox");
-	
-	// await checkbox.click({delay: rdn(30, 150)});
+	await checkbox.click({delay: rdn(30, 150)});
 
-	// const recaptchaBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
-	// const boxFrame = await recaptchaBoxSelector.contentFrame();
-	// await boxFrame.waitForSelector('#recaptcha-audio-button');
-	// const audioButton = await boxFrame.$('#recaptcha-audio-button');
+	const recaptchaBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
+	const boxFrame = await recaptchaBoxSelector.contentFrame();
+	await boxFrame.waitForSelector('#recaptcha-audio-button');
+	const audioButton = await boxFrame.$('#recaptcha-audio-button');
 
-	// console.log("[+] Clicking Audio Button");
+	console.log("[+] Clicking Audio Button");
 
-	// await audioButton.click({delay: rdn(30, 150)});
+	await audioButton.click({delay: rdn(30, 150)});
 
-	// const audioBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
-	// const audioBoxFrame = await audioBoxSelector.contentFrame();
-	// await audioBoxFrame.waitForSelector('.rc-audiochallenge-tdownload-link');
-	// const audioLink = await audioBoxFrame.$eval('.rc-audiochallenge-tdownload-link', el => el.href)
+	const audioBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
+	const audioBoxFrame = await audioBoxSelector.contentFrame();
+	await audioBoxFrame.waitForSelector('.rc-audiochallenge-tdownload-link');
+	const audioLink = await audioBoxFrame.$eval('.rc-audiochallenge-tdownload-link', el => el.href)
 
-	// console.log("[+] Returning Audio Link");
+	console.log("[+] Returning Audio Link");
 
-	// let filename = `${Date.now()}.mp3`
+	let filename = `./audio/${Date.now()}.mp3`
 
- //  const downloadAudio = await page.evaluate(audioLink => {
- //  	return (async () => {
- //  		const a = document.createElement('a')
-	// 	  a.href = audioLink
-	// 	  a.download = filename
-	// 	  document.body.appendChild(a)
-	// 	  a.style.display = 'none'
-	// 	  a.click()
-	// 	  a.remove()
- //  	})()
- //  }, audioLink)
+  const audioBytes = await page.evaluate(audioLink => {
+    return (async () => {
+      const response = await window.fetch(audioLink)
+      const buffer = await response.arrayBuffer()
+      return Array.from(new Uint8Array(buffer))
+    })()
+  }, audioLink)
 
- const page2 = await browser.newPage();
- await page2.goto('https://virtualspeech.com/tools/audio-to-text-converter');
+  console.log("[+] Saving Audio File");
 
- const emailInputSelector = await page2.waitForSelector('#emailInput');
- await emailInputSelector.type('mabargans@mailsac.com');
+  fs.appendFileSync(filename, Buffer.from(audioBytes));
 
- const inputFileSelector = await page2.waitForSelector('#fileInput');
- await inputFileSelector.uploadFile('1.mp3'); 
+  console.log("[+] Analyzing Audio Answer");
 
- const closePricingBanner = await page2.waitForSelector('.sticky-footer-banner-exit');
- await closePricingBanner.click({delay: rdn(30, 150)});
- 
- const submitSelector = await page2.waitForSelector('#submitButton');
- await submitSelector.click({delay: rdn(30, 150)});
+  const accessKey = "6//3Xg+yxZx/+S4matNNvQGt3R7imDAQRWt89Z9vhWArUjHHigBiow==" // Obtained from the Picovoice Console (https://console.picovoice.ai/)
+	const handle = new Leopard(accessKey);
 
- await page2.waitForTimeout(3000)
+	const result = handle.processFile(filename);
 
- const convertBtn = await page2.waitForSelector('#convertButton');
- await convertBtn.click();
+	const answer = result.transcript;
 
- await page2.waitForTimeout(30000)
+	console.log(`[+] The Answer is "${answer}"`);
 
- await page2.goto('https://mailsac.com/login');
- const emailMailsac = await page2.waitForSelector('[name="username"]');
- await emailMailsac.type('anjeaye1231@gmail.com')
+	console.log(`[+] Place Answer to Input`);
 
- const passwordMailsac = await page2.waitForSelector('[name="password"]');
- await passwordMailsac.type('Dzikru!234')
+	const inputCaptchaBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
+	const inputCaptchaBoxFrame = await inputCaptchaBoxSelector.contentFrame();
+	await inputCaptchaBoxFrame.waitForSelector('#audio-response');
+	const inputAnswer = await inputCaptchaBoxFrame.$('#audio-response');
+	await inputAnswer.type(answer)
 
- const submitMailsac = await page2.waitForSelector('[type="submit"]');
- await submitMailsac.click();
+	console.log(`[+] Verify The Captcha`);
 
- await page2.waitForTimeout(3000)
+	await inputCaptchaBoxFrame.waitForSelector('#recaptcha-verify-button');
+	const verifyButton = await inputCaptchaBoxFrame.$('#recaptcha-verify-button');
+	await verifyButton.click();
 
- await page2.goto('https://mailsac.com/inbox/mabargans%40mailsac.com');
-
- await page2.waitForTimeout(1000) 
-
- await page2.reload();
-
- const firstEmail = await page2.waitForSelector('.col-xs-4');
- await firstEmail.click();
-
- await page2.waitForTimeout(5000)
-
- const rawLinkSelector = await page2.waitForSelector('.btn-group.pull-right')
- const rawLink = await rawLinkSelector.$eval('[href*="raw"]', el => el.href)
- 
- await page2.goto(rawLink.replace('?download=1', ''));
- const answerText = await page2.evaluate(() => {
- 	const elem = document.querySelector('pre')
- 	const text = elem.innerHTML
- 	return text.match(/(?<=txt"\n\n)(.*)(?=.\n-)/s)[0]
- })
-
- console.log(answerText)
+	console.log(`[+] Captcha is Verified`);
 
 })();
