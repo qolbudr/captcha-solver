@@ -17,6 +17,7 @@ let dataSiteKey = process.argv[3];
 
 	const browser = await puppeteer.launch({
 		headless: false,
+		args: [ '--proxy-server=socks5://127.0.0.1:9050' ]
 	});
 
 	await browser.defaultBrowserContext().overridePermissions(pageURL, ['clipboard-read', 'clipboard-write']);
@@ -64,7 +65,7 @@ let dataSiteKey = process.argv[3];
 
 	console.log("[+] Returning Audio Link");
 
-	console.log(audioLink);
+	console.log("\n" + audioLink + "\n");
 
 	let filename = `./audio/${Date.now()}.mp3`
 
@@ -124,6 +125,6 @@ let dataSiteKey = process.argv[3];
 		return elem.value
 	})
 
-	console.log(gCaptchaResponse)
+	console.log("\n" + gCaptchaResponse + "\n")
 
 })();
