@@ -4,6 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import { Leopard } from '@picovoice/leopard-node';
 
+let pageURL = process.argv[2];
+let dataSiteKey = process.argv[3];
+
 (async () => {
 
 	const rdn = (min, max) => {
@@ -13,14 +16,23 @@ import { Leopard } from '@picovoice/leopard-node';
 	}
 
 	const browser = await puppeteer.launch({
-		headless: false
+		headless: false,
 	});
+
+	await browser.defaultBrowserContext().overridePermissions(pageURL, ['clipboard-read', 'clipboard-write']);
 
 	const page = await browser.newPage();
 
-	await page.goto('https://www.google.com/recaptcha/api2/demo');
+	await page.goto(pageURL);
 
 	const recaptchaSelector = await page.waitForSelector('iframe[src*="api2/anchor"]');
+	
+	await page.evaluate((dataSiteKey) => {
+		const iframe = document.querySelector('iframe[src*="api2/anchor"]');
+		const url = iframe.src;
+		iframe.src = url.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
+	}, dataSiteKey)
+
 	const frame = await recaptchaSelector.contentFrame();
 	await frame.waitForSelector('#recaptcha-anchor');
 	const checkbox = await frame.$('#recaptcha-anchor');
@@ -30,6 +42,13 @@ import { Leopard } from '@picovoice/leopard-node';
 	await checkbox.click({delay: rdn(30, 150)});
 
 	const recaptchaBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
+
+	await page.evaluate((dataSiteKey) => {
+		const iframe = document.querySelector('iframe[src*="api2/bframe"]');
+		const url = iframe.src;
+		iframe.src = url.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
+	}, dataSiteKey)
+
 	const boxFrame = await recaptchaBoxSelector.contentFrame();
 	await boxFrame.waitForSelector('#recaptcha-audio-button');
 	const audioButton = await boxFrame.$('#recaptcha-audio-button');
@@ -45,9 +64,14 @@ import { Leopard } from '@picovoice/leopard-node';
 
 	console.log("[+] Returning Audio Link");
 
+	console.log(audioLink);
+
 	let filename = `./audio/${Date.now()}.mp3`
 
-  const audioBytes = await page.evaluate(audioLink => {
+	const page2 = await browser.newPage();
+	await page2.goto('https://www.google.com/recaptcha/api2/demo');
+
+  const audioBytes = await page2.evaluate(audioLink => {
     return (async () => {
       const response = await window.fetch(audioLink)
       const buffer = await response.arrayBuffer()
@@ -72,6 +96,8 @@ import { Leopard } from '@picovoice/leopard-node';
 
 	console.log(`[+] Place Answer to Input`);
 
+	await page2.close();
+
 	const inputCaptchaBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
 	const inputCaptchaBoxFrame = await inputCaptchaBoxSelector.contentFrame();
 	await inputCaptchaBoxFrame.waitForSelector('#audio-response');
@@ -84,6 +110,20 @@ import { Leopard } from '@picovoice/leopard-node';
 	const verifyButton = await inputCaptchaBoxFrame.$('#recaptcha-verify-button');
 	await verifyButton.click();
 
+	await page.waitForTimeout(3000);
+
 	console.log(`[+] Captcha is Verified`);
+
+	await page.bringToFront();
+
+	const gCaptchaResponse = await page.evaluate(() => {
+		const elem = document.querySelector('#g-recaptcha-response');
+		elem.style.display = 'block'
+		elem.focus();
+		elem.select();
+		return elem.value
+	})
+
+	console.log(gCaptchaResponse)
 
 })();
