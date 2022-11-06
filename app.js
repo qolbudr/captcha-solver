@@ -74,7 +74,7 @@ let dataSiteKey = process.argv[3];
 
 	console.log("\n" + audioLink + "\n");
 
-	let filename = `./audio/${Date.now()}.mp3`
+	let filename = `./cache/audio/${Date.now()}.mp3`
 
 	const page2 = await browser.newPage();
 	await page2.goto('https://www.google.com/recaptcha/api2/demo');
