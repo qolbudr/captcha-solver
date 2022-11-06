@@ -7,6 +7,7 @@ import { Leopard } from '@picovoice/leopard-node';
 let pageURL = process.argv[2];
 let dataSiteKey = process.argv[3];
 
+
 (async () => {
 
 	const rdn = (min, max) => {
@@ -16,8 +17,8 @@ let dataSiteKey = process.argv[3];
 	}
 
 	const browser = await puppeteer.launch({
-		headless: false,
-		args: [ '--proxy-server=socks5://127.0.0.1:9050' ]
+		headless: true,
+		args: [ '--window-size=500,500', '--window-position=000,000', '--disable-web-security', '--proxy-server=127.0.0.1:8888' ]
 	});
 
 	await browser.defaultBrowserContext().overridePermissions(pageURL, ['clipboard-read', 'clipboard-write']);
@@ -25,14 +26,22 @@ let dataSiteKey = process.argv[3];
 	const page = await browser.newPage();
 
 	await page.goto(pageURL);
-
-	const recaptchaSelector = await page.waitForSelector('iframe[src*="api2/anchor"]');
 	
-	await page.evaluate((dataSiteKey) => {
+	await page.evaluate( async (dataSiteKey) => {
 		const iframe = document.querySelector('iframe[src*="api2/anchor"]');
 		const url = iframe.src;
 		iframe.src = url.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
+		await new Promise(resolve => setTimeout(resolve, 3000));
 	}, dataSiteKey)
+
+	await page.evaluate( async (dataSiteKey) => {
+		const iframe = document.querySelector('iframe[src*="api2/bframe"]');
+		const url = iframe.src;
+		iframe.src = url.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
+		await new Promise(resolve => setTimeout(resolve, 3000));
+	}, dataSiteKey)
+
+	const recaptchaSelector = await page.waitForSelector('iframe[src*="api2/anchor"]');
 
 	const frame = await recaptchaSelector.contentFrame();
 	await frame.waitForSelector('#recaptcha-anchor');
@@ -44,12 +53,6 @@ let dataSiteKey = process.argv[3];
 
 	const recaptchaBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
 
-	await page.evaluate((dataSiteKey) => {
-		const iframe = document.querySelector('iframe[src*="api2/bframe"]');
-		const url = iframe.src;
-		iframe.src = url.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
-	}, dataSiteKey)
-
 	const boxFrame = await recaptchaBoxSelector.contentFrame();
 	await boxFrame.waitForSelector('#recaptcha-audio-button');
 	const audioButton = await boxFrame.$('#recaptcha-audio-button');
@@ -57,6 +60,10 @@ let dataSiteKey = process.argv[3];
 	console.log("[+] Clicking Audio Button");
 
 	await audioButton.click({delay: rdn(30, 150)});
+
+	await page.waitForTimeout(5000)
+
+	await page.screenshot({path: 'audio.jpg'})
 
 	const audioBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
 	const audioBoxFrame = await audioBoxSelector.contentFrame();
