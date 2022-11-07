@@ -1,12 +1,9 @@
 import puppeteer from 'puppeteer';
-import os from 'os';
 import fs from 'fs';
-import path from 'path';
 import { Leopard } from '@picovoice/leopard-node';
 
 let pageURL = process.argv[2];
 let dataSiteKey = process.argv[3];
-
 
 (async () => {
 
@@ -18,27 +15,25 @@ let dataSiteKey = process.argv[3];
 
 	const browser = await puppeteer.launch({
 		headless: true,
-		args: [ '--window-size=500,500', '--window-position=000,000', '--disable-web-security', '--proxy-server=127.0.0.1:8888' ]
+		args: [ '--window-size=500,500', '--window-position=000,000', '--disable-web-security' ]
 	});
-
-	await browser.defaultBrowserContext().overridePermissions(pageURL, ['clipboard-read', 'clipboard-write']);
 
 	const page = await browser.newPage();
 
 	await page.goto(pageURL);
 	
 	await page.evaluate( async (dataSiteKey) => {
-		const iframe = document.querySelector('iframe[src*="api2/anchor"]');
-		const url = iframe.src;
-		iframe.src = url.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
-		await new Promise(resolve => setTimeout(resolve, 3000));
-	}, dataSiteKey)
+		const iframeAnchor = document.querySelector('iframe[src*="api2/anchor"]');
+		const urlAnchor = iframeAnchor.src;
+		iframeAnchor.src = urlAnchor.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
 
-	await page.evaluate( async (dataSiteKey) => {
-		const iframe = document.querySelector('iframe[src*="api2/bframe"]');
-		const url = iframe.src;
-		iframe.src = url.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
-		await new Promise(resolve => setTimeout(resolve, 3000));
+		const iframeBframe = document.querySelector('iframe[src*="api2/bframe"]');
+		if(iframeBframe)
+		{
+			const urlBframe = iframeBframe.src;
+			iframeBframe.src = urlBframe.replace(/(?<=k=)(.*?)(?=&)/gm, dataSiteKey)
+		}
+		await new Promise(resolve => setTimeout(resolve, 6000));
 	}, dataSiteKey)
 
 	const recaptchaSelector = await page.waitForSelector('iframe[src*="api2/anchor"]');
@@ -63,12 +58,10 @@ let dataSiteKey = process.argv[3];
 
 	await page.waitForTimeout(5000)
 
-	await page.screenshot({path: 'audio.jpg'})
+	await page.screenshot({path: './cache/audio.jpg'})
 
-	const audioBoxSelector = await page.waitForSelector('iframe[src*="api2/bframe"]');
-	const audioBoxFrame = await audioBoxSelector.contentFrame();
-	await audioBoxFrame.waitForSelector('.rc-audiochallenge-tdownload-link');
-	const audioLink = await audioBoxFrame.$eval('.rc-audiochallenge-tdownload-link', el => el.href)
+	await boxFrame.waitForSelector('.rc-audiochallenge-tdownload-link');
+	const audioLink = await boxFrame.$eval('.rc-audiochallenge-tdownload-link', el => el.href)
 
 	console.log("[+] Returning Audio Link");
 
@@ -121,8 +114,6 @@ let dataSiteKey = process.argv[3];
 	await page.waitForTimeout(3000);
 
 	console.log(`[+] Captcha is Verified`);
-
-	await page.bringToFront();
 
 	const gCaptchaResponse = await page.evaluate(() => {
 		const elem = document.querySelector('#g-recaptcha-response');
